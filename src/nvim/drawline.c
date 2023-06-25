@@ -135,6 +135,8 @@ typedef struct {
   int skip_cells;                   // nr of cells to skip for virtual text
   int skipped_cells;                // nr of skipped virtual text cells
   bool more_virt_inline_chunks;     // indicates if there is more inline virtual text after n_extra
+
+  int next_virt_inline_chunk;       // indicates when the next inline chunk is present
 } winlinevars_T;
 
 /// for line_putchar. Contains the state that needs to be remembered from
@@ -871,10 +873,10 @@ static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
   }
 }
 
-// Checks if there is more inline virtual text that need to be drawn
-// and sets has_more_virt_inline_chunks to reflect that.
-static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
+// Indcates when to next test for inline virtual text.
+static int next_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
 {
+  int next_inline_test = -1;
   DecorState *state = &decor_state;
   for (size_t i = 0; i < kv_size(state->active); i++) {
     DecorRange *item = &kv_A(state->active, i);
@@ -884,10 +886,11 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
       continue;
     }
     if (item->draw_col >= -1 && item->start_col >= v) {
-      return true;
+      next_inline_test = item->start_col;
     }
   }
-  return false;
+
+  return next_inline_test;
 }
 
 static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v)
@@ -901,7 +904,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       for (size_t i = 0; i < kv_size(state->active); i++) {
         DecorRange *item = &kv_A(state->active, i);
         if (item->start_row != state->row
-            || !kv_size(item->decor.virt_text)
+          || !kv_size(item->decor.virt_text)
             || item->decor.virt_text_pos != kVTInline) {
           continue;
         }
@@ -912,8 +915,9 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
           break;
         }
       }
-      wlv->more_virt_inline_chunks = has_more_inline_virt(wlv, v);
+      wlv->next_virt_inline_chunk = next_inline_virt(wlv, v);
       if (!kv_size(wlv->virt_inline)) {
+        wlv->more_virt_inline_chunks = false;
         // no more inline virtual text here
         break;
       }
@@ -932,8 +936,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       wlv->n_attr = mb_charlen(vtc.text);
 
       // Checks if there is more inline virtual text chunks that need to be drawn.
-      wlv->more_virt_inline_chunks = has_more_inline_virt(wlv, v)
-                                     || wlv->virt_inline_i < kv_size(wlv->virt_inline);
+      wlv->more_virt_inline_chunks = wlv->virt_inline_i < kv_size(wlv->virt_inline);
 
       // If the text didn't reach until the first window
       // column we need to skip cells.
@@ -1648,6 +1651,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
   int sign_idx = 0;
   int virt_line_index;
   int virt_line_offset = -1;
+  wlv.next_virt_inline_chunk = -1;
   // Repeat for the whole displayed line.
   while (true) {
     int has_match_conc = 0;  ///< match wants to conceal
@@ -1825,18 +1829,20 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
         extmark_attr = decor_redraw_col(wp, (colnr_T)v, wlv.off, selected, &decor_state);
 
         if (!has_fold) {
-          handle_inline_virtual_text(wp, &wlv, v);
-          if (wlv.n_extra > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace) {
-            // restore search_attr and area_attr when n_extra is down to zero
-            // TODO(bfredl): this is ugly as fuck. look if we can do this some other way.
-            saved_search_attr = search_attr;
-            saved_area_attr = area_attr;
-            saved_search_attr_from_match = search_attr_from_match;
-            search_attr_from_match = false;
-            search_attr = 0;
-            area_attr = 0;
-            extmark_attr = 0;
-            n_skip = 0;
+          if (v >= wlv.next_virt_inline_chunk) {
+            handle_inline_virtual_text(wp, &wlv, v);
+            if (wlv.n_extra > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace) {
+              // restore search_attr and area_attr when n_extra is down to zero
+              // TODO(bfredl): this is ugly as fuck. look if we can do this some other way.
+              saved_search_attr = search_attr;
+              saved_area_attr = area_attr;
+              saved_search_attr_from_match = search_attr_from_match;
+              search_attr_from_match = false;
+              search_attr = 0;
+              area_attr = 0;
+              extmark_attr = 0;
+              n_skip = 0;
+            }
           }
         }
       }
@@ -2901,7 +2907,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
         && (*ptr != NUL
             || lcs_eol_one > 0
             || (wlv.n_extra > 0 && (wlv.c_extra != NUL || *wlv.p_extra != NUL))
-            || wlv.more_virt_inline_chunks)) {
+            || (wlv.more_virt_inline_chunks || wlv.next_virt_inline_chunk != -1))) {
       c = wp->w_p_lcs_chars.ext;
       wlv.char_attr = win_hl_attr(wp, HLF_AT);
       mb_c = c;
@@ -3091,7 +3097,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
             || (wp->w_p_list && wp->w_p_lcs_chars.eol != NUL
                 && wlv.p_extra != at_end_str)
             || (wlv.n_extra != 0
-                && (wlv.c_extra != NUL || *wlv.p_extra != NUL)) || wlv.more_virt_inline_chunks)) {
+                && (wlv.c_extra != NUL || *wlv.p_extra != NUL)) || (wlv.more_virt_inline_chunks || wlv.next_virt_inline_chunk != -1))) {
       bool wrap = wp->w_p_wrap       // Wrapping enabled.
                   && wlv.filler_todo <= 0          // Not drawing diff filler lines.
                   && lcs_eol_one != -1         // Haven't printed the lcs_eol character.
