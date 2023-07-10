@@ -289,6 +289,7 @@ api.nvim_set_decoration_provider(namespace, {
               virt_text_pos = 'inline',
               ephemeral = false,
               virt_text = vt,
+              right_gravity = hint.label == 1 and true or false
             })
           end
         end
