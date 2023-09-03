@@ -235,6 +235,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
               cts->cts_cur_text_width_left += decor.virt_text_width;
             }
             size += decor.virt_text_width;
+            size -= 2;
             if (*s == TAB) {
               // tab size changes because of the inserted text
               size -= tab_size;
