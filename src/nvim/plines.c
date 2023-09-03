@@ -17,6 +17,7 @@
 #include "nvim/indent.h"
 #include "nvim/macros.h"
 #include "nvim/mark.h"
+#include "nvim/marktree.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/move.h"
@@ -129,6 +130,8 @@ void init_chartabsize_arg(chartabsize_T *cts, win_T *wp, linenr_T lnum, colnr_T 
   cts->cts_max_head_vcol = 0;
   cts->cts_cur_text_width_left = 0;
   cts->cts_cur_text_width_right = 0;
+  cts->cts_conceal_size = 0;
+  cts->cts_conceal_text_size = 0;
   cts->cts_has_virt_text = false;
   cts->cts_row = lnum - 1;
 
@@ -222,30 +225,71 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
   if (cts->cts_has_virt_text) {
     int tab_size = size;
     int col = (int)(s - line);
+
+    int left_width = 0;
+    int right_width = 0;
+
+    int end_pos = -1;
+
     while (true) {
       MTKey mark = marktree_itr_current(cts->cts_iter);
-      if (mark.pos.row != cts->cts_row || mark.pos.col > col) {
+      if (mark.pos.row != cts->cts_row || (mark.pos.col > col && mark.pos.col > end_pos)) {
         break;
       } else if (mark.pos.col == col) {
         if (!mt_end(mark)) {
           Decoration decor = get_decor(mark);
           if (decor.virt_text_pos == kVTInline) {
             if (mt_right(mark)) {
-              cts->cts_cur_text_width_right += decor.virt_text_width;
+              right_width += decor.virt_text_width;
             } else {
-              cts->cts_cur_text_width_left += decor.virt_text_width;
+              left_width += decor.virt_text_width;
             }
-            size += decor.virt_text_width;
-            if (*s == TAB) {
-              // tab size changes because of the inserted text
-              size -= tab_size;
-              tab_size = win_chartabsize(wp, s, vcol + size);
-              size += tab_size;
+            // Since this includes the next char size, must set to the virt length
+            if (mt_start(mark)) {
+              mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, NULL);
+              if (end.col > col) {
+                end_pos = end.col;
+                cts->cts_conceal_text_size += decor.virt_text_width;
+              }
             }
           }
         }
+      } else if (mark.pos.col > col && mt_start(mark)) {
+          Decoration decor = get_decor(mark);
+          if (decor.virt_text_pos == kVTInline) {
+            cts->cts_conceal_text_size += decor.virt_text_width;
+            mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, cts->cts_iter);
+            if (end_pos < end.col) {
+              end_pos = end.col;
+            }
+          }
       }
       marktree_itr_next(wp->w_buffer->b_marktree, cts->cts_iter);
+    }
+
+    if (end_pos > 0) {
+      cts->cts_conceal_size = end_pos - col;
+    }
+
+    if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size < cts->cts_conceal_size) {
+      cts->cts_conceal_size -= size;
+      size = 0;
+    } else if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size >= cts->cts_conceal_size) {
+      cts->cts_conceal_text_size -= size;
+      cts->cts_conceal_size -= size;
+    } else {
+      size += left_width + right_width + cts->cts_conceal_text_size;
+      cts->cts_cur_text_width_left = left_width + cts->cts_conceal_text_size;
+      cts->cts_cur_text_width_right = right_width;
+      cts->cts_conceal_text_size = 0;
+      cts->cts_conceal_size = 0;
+
+      if (*s == TAB) {
+        // tab size changes because of the inserted text
+        size -= tab_size;
+        tab_size = win_chartabsize(wp, s, vcol + size);
+        size += tab_size;
+      }
     }
   }
 
