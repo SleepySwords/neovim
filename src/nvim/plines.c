@@ -128,6 +128,7 @@ void init_chartabsize_arg(chartabsize_T *cts, win_T *wp, linenr_T lnum, colnr_T 
   cts->cts_max_head_vcol = 0;
   cts->cts_cur_text_width_left = 0;
   cts->cts_cur_text_width_right = 0;
+  cts->cts_end_conceal = 0;
   cts->cts_has_virt_text = false;
   cts->cts_row = lnum - 1;
 
@@ -152,8 +153,8 @@ void clear_chartabsize_arg(chartabsize_T *cts)
 /// @return The number of characters taken up on the screen.
 int lbr_chartabsize(chartabsize_T *cts)
 {
-  if (!curwin->w_p_lbr && *get_showbreak_value(curwin) == NUL
-      && !curwin->w_p_bri && !cts->cts_has_virt_text) {
+  if (!curwin->w_p_lbr && *get_showbreak_value(curwin) == NUL && !curwin->w_p_bri
+      && !cts->cts_has_virt_text) {
     if (curwin->w_p_wrap) {
       return win_nolbr_chartabsize(cts, NULL);
     }
@@ -201,8 +202,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
   cts->cts_cur_text_width_right = 0;
 
   // No 'linebreak', 'showbreak' and 'breakindent': return quickly.
-  if (!wp->w_p_lbr && !wp->w_p_bri && *get_showbreak_value(wp) == NUL
-      && !cts->cts_has_virt_text) {
+  if (!wp->w_p_lbr && !wp->w_p_bri && *get_showbreak_value(wp) == NUL && !cts->cts_has_virt_text) {
     if (wp->w_p_wrap) {
       return win_nolbr_chartabsize(cts, headp);
     }
@@ -217,6 +217,10 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     size = 0;  // NUL is not displayed
   }
   bool is_doublewidth = size == 2 && MB_BYTE2LEN((uint8_t)(*s)) > 1;
+
+  if (cts->cts_end_conceal > (int)(s - line)) {
+    size = 0;
+  }
 
   if (cts->cts_has_virt_text) {
     int tab_size = size;
@@ -234,8 +238,9 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
             } else {
               cts->cts_cur_text_width_left += decor.virt_text_width;
             }
-            size += decor.virt_text_width;
-            size -= 2;
+            // Since this includes the next char size, must set to the virt length
+            size = decor.virt_text_width;
+            cts->cts_end_conceal = col + 3;
             if (*s == TAB) {
               // tab size changes because of the inserted text
               size -= tab_size;
@@ -318,8 +323,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
         if (max_head_vcol == 0 || vcol + size + added < max_head_vcol) {
           head += cnt * head_mid;
         } else if (max_head_vcol > vcol + head_prev + prev_rem) {
-          head += (max_head_vcol - (vcol + head_prev + prev_rem)
-                   + width2 - 1) / width2 * head_mid;
+          head += (max_head_vcol - (vcol + head_prev + prev_rem) + width2 - 1) / width2 * head_mid;
         } else if (max_head_vcol < 0) {
           int off = virt_text_cursor_off(cts, *s == NUL);
           if (off >= prev_rem) {
@@ -342,10 +346,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
 
   // If 'linebreak' set check at a blank before a non-blank if the line
   // needs a break here
-  if (wp->w_p_lbr
-      && vim_isbreak((uint8_t)s[0])
-      && !vim_isbreak((uint8_t)s[1])
-      && wp->w_p_wrap
+  if (wp->w_p_lbr && vim_isbreak((uint8_t)s[0]) && !vim_isbreak((uint8_t)s[1]) && wp->w_p_wrap
       && wp->w_width_inner != 0) {
     // Count all characters from first non-blank after a blank up to next
     // non-blank after a blank.
@@ -365,8 +366,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
       char *ps = s;
       MB_PTR_ADV(s);
       int c = (uint8_t)(*s);
-      if (!(c != NUL
-            && (vim_isbreak(c) || vcol2 == vcol || !vim_isbreak((uint8_t)(*ps))))) {
+      if (!(c != NUL && (vim_isbreak(c) || vcol2 == vcol || !vim_isbreak((uint8_t)(*ps))))) {
         break;
       }
 
@@ -397,9 +397,7 @@ static int win_nolbr_chartabsize(chartabsize_T *cts, int *headp)
   int n;
 
   if ((*s == TAB) && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
-    return tabstop_padding(col,
-                           wp->w_buffer->b_p_ts,
-                           wp->w_buffer->b_p_vts_array);
+    return tabstop_padding(col, wp->w_buffer->b_p_ts, wp->w_buffer->b_p_vts_array);
   }
   n = ptr2cells(s);
 
@@ -418,8 +416,8 @@ static int win_nolbr_chartabsize(chartabsize_T *cts, int *headp)
 ///
 /// @param  wp    window
 /// @param  vcol  column number
-static bool in_win_border(win_T *wp, colnr_T vcol)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
+static bool in_win_border(win_T *wp, colnr_T vcol) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+  FUNC_ATTR_NONNULL_ARG(1)
 {
   if (wp->w_width_inner == 0) {
     // there is no border
@@ -507,11 +505,8 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
   // When 'list', 'linebreak', 'showbreak' and 'breakindent' are not set
   // and there are no virtual text use a simple loop.
   // Also use this when 'list' is set but tabs take their normal size.
-  if ((!wp->w_p_list || (wp->w_p_lcs_chars.tab1 != NUL))
-      && !wp->w_p_lbr
-      && *get_showbreak_value(wp) == NUL
-      && !wp->w_p_bri
-      && !cts.cts_has_virt_text) {
+  if ((!wp->w_p_list || (wp->w_p_lcs_chars.tab1 != NUL)) && !wp->w_p_lbr
+      && *get_showbreak_value(wp) == NUL && !wp->w_p_bri && !cts.cts_has_virt_text) {
     while (true) {
       head = 0;
       int c = (uint8_t)(*ptr);
@@ -538,9 +533,7 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
         // If a double-cell char doesn't fit at the end of a line
         // it wraps to the next line, it's like this char is three
         // cells wide.
-        if ((incr == 2)
-            && wp->w_p_wrap
-            && (MB_BYTE2LEN((uint8_t)(*ptr)) > 1)
+        if ((incr == 2) && wp->w_p_wrap && (MB_BYTE2LEN((uint8_t)(*ptr)) > 1)
             && in_win_border(wp, vcol)) {
           incr++;
           head = 1;
@@ -592,10 +585,7 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
   }
 
   if (cursor != NULL) {
-    if ((*ptr == TAB)
-        && (State & MODE_NORMAL)
-        && !wp->w_p_list
-        && !virtual_active()
+    if ((*ptr == TAB) && (State & MODE_NORMAL) && !wp->w_p_list && !virtual_active()
         && !(VIsual_active && ((*p_sel == 'e') || ltoreq(*pos, VIsual)))) {
       // cursor at end
       *cursor = vcol + incr - 1;
@@ -850,8 +840,7 @@ int plines_win_col(win_T *wp, linenr_T lnum, long column)
   // wraps from one screen line to the next (when 'columns' is not a multiple
   // of 'ts') -- webb.
   col = cts.cts_vcol;
-  if (*cts.cts_ptr == TAB && (State & MODE_NORMAL)
-      && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
+  if (*cts.cts_ptr == TAB && (State & MODE_NORMAL) && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
     col += win_lbr_chartabsize(&cts, NULL) - 1;
   }
   clear_chartabsize_arg(&cts);
@@ -889,8 +878,8 @@ int plines_win_full(win_T *wp, linenr_T lnum, linenr_T *const nextp, bool *const
   if (foldedp != NULL) {
     *foldedp = folded;
   }
-  return ((folded ? 1 : plines_win_nofill(wp, lnum, limit_winheight)) +
-          (lnum == wp->w_topline ? wp->w_topfill : win_get_fill(wp, lnum)));
+  return ((folded ? 1 : plines_win_nofill(wp, lnum, limit_winheight))
+          + (lnum == wp->w_topline ? wp->w_topfill : win_get_fill(wp, lnum)));
 }
 
 /// Get the number of screen lines a range of buffer lines will take in window "wp".
@@ -948,9 +937,8 @@ int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_
     const bool folded = hasFoldingWin(wp, lnum, &lnum, &lnum_next, true, NULL);
     height_cur_nofill = folded ? 1 : plines_win_nofill(wp, lnum, false);
     height_sum_nofill += height_cur_nofill;
-    const int64_t row_off = (start_vcol < width1 || width2 <= 0)
-                            ? 0
-                            : 1 + (start_vcol - width1) / width2;
+    const int64_t row_off
+      = (start_vcol < width1 || width2 <= 0) ? 0 : 1 + (start_vcol - width1) / width2;
     height_sum_nofill -= MIN(row_off, height_cur_nofill);
     lnum = lnum_next + 1;
   }
@@ -966,8 +954,7 @@ int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_
 
   if (end_vcol >= 0) {
     height_sum_nofill -= height_cur_nofill;
-    const int64_t row_off = end_vcol == 0
-                            ? 0
+    const int64_t row_off = end_vcol == 0 ? 0
                             : (end_vcol <= width1 || width2 <= 0)
                               ? 1
                               : 1 + (end_vcol - width1 + width2 - 1) / width2;
