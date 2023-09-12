@@ -2008,10 +2008,10 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
           if (wlv.extra_for_extmark) {
             // wlv.extra_attr should be used at this position but not
             // any further.
+            ptr += CONCEAL_TEST_SIZE;
             wlv.reset_extra_attr = true;
           }
         }
-        ptr += CONCEAL_TEST_SIZE;
         wlv.extra_for_extmark = false;
       }
     } else if (has_fold) {

@@ -245,7 +245,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
               tab_size = win_chartabsize(wp, s, vcol + size);
               size += tab_size;
             }
-            /* size = 0; */
+            // size = 0;
           }
         }
       }
