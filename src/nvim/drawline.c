@@ -2011,7 +2011,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
             wlv.reset_extra_attr = true;
           }
         }
-        ptr += 3;
+        ptr += CONCEAL_TEST_SIZE;
         wlv.extra_for_extmark = false;
       }
     } else if (has_fold) {

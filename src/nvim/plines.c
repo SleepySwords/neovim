@@ -128,7 +128,7 @@ void init_chartabsize_arg(chartabsize_T *cts, win_T *wp, linenr_T lnum, colnr_T 
   cts->cts_max_head_vcol = 0;
   cts->cts_cur_text_width_left = 0;
   cts->cts_cur_text_width_right = 0;
-  cts->cts_end_conceal = 0;
+  cts->cts_end_conceal = -1;
   cts->cts_conceal_size = 0;
   cts->cts_has_virt_text = false;
   cts->cts_row = lnum - 1;
@@ -223,10 +223,6 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     int tab_size = size;
     int col = (int)(s - line);
 
-    if (cts->cts_end_conceal > col && cts->cts_conceal_size < cts->cts_end_conceal - col) {
-      size = 0;
-    }
-
     while (true) {
       mtkey_t mark = marktree_itr_current(cts->cts_iter);
       if (mark.pos.row != cts->cts_row || mark.pos.col > col) {
@@ -241,19 +237,33 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
               cts->cts_cur_text_width_left += decor.virt_text_width;
             }
             // Since this includes the next char size, must set to the virt length
-            cts->cts_end_conceal = col + 3;
-            cts->cts_conceal_size += decor.virt_text_width;
+            cts->cts_end_conceal = col + CONCEAL_TEST_SIZE;
+            cts->cts_conceal_size = decor.virt_text_width;
             if (*s == TAB) {
               // tab size changes because of the inserted text
               size -= tab_size;
               tab_size = win_chartabsize(wp, s, vcol + size);
               size += tab_size;
             }
-            size = 0;
+            /* size = 0; */
           }
         }
       }
       marktree_itr_next(wp->w_buffer->b_marktree, cts->cts_iter);
+    }
+
+    if (cts->cts_end_conceal > col && cts->cts_conceal_size + col < cts->cts_end_conceal) {
+      size = 0;
+      // I'm quite lazy right now.
+      cts->cts_cur_text_width_left = 0;
+      cts->cts_cur_text_width_right = 0;
+    } else if (cts->cts_end_conceal > col && cts->cts_conceal_size + col >= cts->cts_end_conceal) {
+      cts->cts_conceal_size -= 1;
+      // I'm quite lazy right now, this removes the offset if hovering over it.
+      cts->cts_cur_text_width_left = 0;
+      cts->cts_cur_text_width_right = 0;
+    } else if (cts->cts_end_conceal == col) {
+      size += cts->cts_conceal_size;
     }
   }
 
@@ -593,7 +603,7 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
       // cursor at end
       *cursor = vcol + incr - 1;
     } else {
-      /* vcol += virt_text_cursor_off(&cts, on_NUL); */
+      vcol += virt_text_cursor_off(&cts, on_NUL);
       // cursor at start
       *cursor = vcol + head;
     }
