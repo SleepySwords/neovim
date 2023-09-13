@@ -245,7 +245,6 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
               tab_size = win_chartabsize(wp, s, vcol + size);
               size += tab_size;
             }
-            // size = 0;
           }
         }
       }
@@ -264,6 +263,7 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
       cts->cts_cur_text_width_right = 0;
     } else if (cts->cts_end_conceal == col) {
       size += cts->cts_conceal_size;
+      cts->cts_cur_text_width_left = cts->cts_conceal_size;
     }
   }
 
