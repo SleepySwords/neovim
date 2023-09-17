@@ -16,6 +16,7 @@ typedef struct {
   int cts_row;
 
   bool cts_has_virt_text;        ///< true if if there is inline virtual text
+  bool cts_should_conceal;        ///< true if if there is inline virtual text
   int cts_cur_text_width_left;   ///< width of virtual text left of cursor
   int cts_cur_text_width_right;  ///< width of virtual text right of cursor
   int cts_end_conceal;

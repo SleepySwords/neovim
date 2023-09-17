@@ -224,6 +224,9 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     int tab_size = size;
     int col = (int)(s - line);
 
+    int left_width = 0;
+    int right_width = 0;
+
     while (true) {
       mtkey_t mark = marktree_itr_current(cts->cts_iter);
       if (mark.pos.row != cts->cts_row || mark.pos.col > col) {
@@ -233,13 +236,15 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
           Decoration decor = get_decor(mark);
           if (decor.virt_text_pos == kVTInline) {
             if (mt_right(mark)) {
-              cts->cts_cur_text_width_right += decor.virt_text_width;
+              left_width += decor.virt_text_width;
             } else {
-              cts->cts_cur_text_width_left += decor.virt_text_width;
+              right_width += decor.virt_text_width;
             }
             // Since this includes the next char size, must set to the virt length
-            cts->cts_end_conceal = col + CONCEAL_TEST_SIZE;
-            cts->cts_conceal_size = decor.virt_text_width;
+            if (decor.conceal) {
+              cts->cts_end_conceal = col + CONCEAL_TEST_SIZE;
+              cts->cts_conceal_size += decor.virt_text_width;
+            }
             if (*s == TAB) {
               // tab size changes because of the inserted text
               size -= tab_size;
@@ -254,17 +259,14 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
 
     if (cts->cts_end_conceal > col && cts->cts_conceal_size + col < cts->cts_end_conceal) {
       size = 0;
-      // I'm quite lazy right now.
-      cts->cts_cur_text_width_left = 0;
-      cts->cts_cur_text_width_right = 0;
     } else if (cts->cts_end_conceal > col && cts->cts_conceal_size + col >= cts->cts_end_conceal) {
-      cts->cts_conceal_size -= 1;
-      // I'm quite lazy right now, this removes the offset if hovering over it.
-      cts->cts_cur_text_width_left = 0;
-      cts->cts_cur_text_width_right = 0;
-    } else if (cts->cts_end_conceal == col) {
-      size += cts->cts_conceal_size;
-      cts->cts_cur_text_width_left = cts->cts_conceal_size;
+      cts->cts_conceal_size -= size;
+    } else {
+      size += left_width + right_width + cts->cts_conceal_size;
+      cts->cts_cur_text_width_left = left_width + cts->cts_conceal_size;
+      cts->cts_cur_text_width_right = right_width;
+      cts->cts_conceal_size = 0;
+      cts->cts_end_conceal = -1;
     }
   }
 
