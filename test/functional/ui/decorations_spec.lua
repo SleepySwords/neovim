@@ -1891,6 +1891,88 @@ describe('extmark decorations', function()
                                                         |
     ]]}
   end)
+
+  it('works with rightleft', function()
+    insert('abcdefghijklmnop')
+    feed 'gg'
+    command([[set rl]])
+    screen:expect{grid=[[
+                                        ponmlkjihgfedcb^a|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+                                                        |
+    ]]}
+    meths.buf_set_extmark(0, ns, 0, 0, { virt_text = {{'end_of_line', 'Underlined'}}})
+    meths.buf_set_extmark(0, ns, 0, 0, { virt_text = {{'right_align', 'Underlined'}}, virt_text_pos = 'right_align' })
+    meths.buf_set_extmark(0, ns, 0, 2, { virt_text = {{'overlayed', 'Underlined'}}, virt_text_pos = 'overlay' })
+    screen:expect{grid=[[
+      {28:ngila_thgir}           {28:enil_fo_dne} ponml{28:deyalrevo}b^a|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+                                                        |
+    ]]}
+
+    insert('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+
+    screen:expect{grid=[[
+      {28:ngila_tdeyalrevo}ba^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+                                                        |
+    ]]}
+
+    insert('aaaaaaaaaaaaaaaaaaa')
+    screen:expect{grid=[[
+      ^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+      {28:ngila_thgir}          {28:enil_fo_dne} ponml{28:deyalrevo}baa|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+      {1:                                                 ~}|
+                                                        |
+    ]]}
+  end)
 end)
 
 describe('decorations: inline virtual text', function()
