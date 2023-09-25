@@ -18,8 +18,8 @@ typedef struct {
   bool cts_has_virt_text;        ///< true if if there is inline virtual text
   int cts_cur_text_width_left;   ///< width of virtual text left of cursor
   int cts_cur_text_width_right;  ///< width of virtual text right of cursor
-  int cts_end_conceal;
   int cts_conceal_size;
+  int cts_conceal_text_size;
   MarkTreeIter cts_iter[1];
 
   int cts_vcol;                  ///< virtual column at current position

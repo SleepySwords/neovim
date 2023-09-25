@@ -128,8 +128,8 @@ void init_chartabsize_arg(chartabsize_T *cts, win_T *wp, linenr_T lnum, colnr_T 
   cts->cts_max_head_vcol = 0;
   cts->cts_cur_text_width_left = 0;
   cts->cts_cur_text_width_right = 0;
-  cts->cts_end_conceal = -1;
   cts->cts_conceal_size = 0;
+  cts->cts_conceal_text_size = 0;
   cts->cts_has_virt_text = false;
   cts->cts_row = lnum - 1;
 
@@ -242,8 +242,8 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
             }
             // Since this includes the next char size, must set to the virt length
             if (decor.conceal) {
-              cts->cts_end_conceal = col + CONCEAL_TEST_SIZE;
-              cts->cts_conceal_size += decor.virt_text_width;
+              cts->cts_conceal_size += CONCEAL_TEST_SIZE;
+              cts->cts_conceal_text_size += decor.virt_text_width;
             }
             if (*s == TAB) {
               // tab size changes because of the inserted text
@@ -257,16 +257,18 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
       marktree_itr_next(wp->w_buffer->b_marktree, cts->cts_iter);
     }
 
-    if (cts->cts_end_conceal > col && cts->cts_conceal_size + col < cts->cts_end_conceal) {
+    if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size < cts->cts_conceal_size) {
+      cts->cts_conceal_size -= size;
       size = 0;
-    } else if (cts->cts_end_conceal > col && cts->cts_conceal_size + col >= cts->cts_end_conceal) {
+    } else if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size >= cts->cts_conceal_size) {
+      cts->cts_conceal_text_size -= size;
       cts->cts_conceal_size -= size;
     } else {
-      size += left_width + right_width + cts->cts_conceal_size;
-      cts->cts_cur_text_width_left = left_width + cts->cts_conceal_size;
+      size += left_width + right_width + cts->cts_conceal_text_size;
+      cts->cts_cur_text_width_left = left_width + cts->cts_conceal_text_size;
       cts->cts_cur_text_width_right = right_width;
+      cts->cts_conceal_text_size = 0;
       cts->cts_conceal_size = 0;
-      cts->cts_end_conceal = -1;
     }
   }
 

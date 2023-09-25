@@ -51,6 +51,7 @@
 #include "nvim/types.h"
 #include "nvim/ui.h"
 #include "nvim/vim.h"
+#include "globals.h"
 
 #define MB_FILLER_CHAR '<'  // character used when a double-width character
                             // doesn't fit.
@@ -138,6 +139,7 @@ typedef struct {
                              ///< to be added to wlv.vcol later
   bool more_virt_inline_chunks;  ///< indicates if there is more inline virtual text
                                  ///< after n_extra
+  int conceal_size;         ///< nr of cells to skip ptr
 } winlinevars_T;
 
 /// for line_putchar. Contains the state that needs to be remembered from
@@ -930,6 +932,8 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       wlv->extra_attr = vtc.hl_id ? syn_id2attr(vtc.hl_id) : 0;
       wlv->n_attr = mb_charlen(vtc.text);
 
+      wlv->conceal_size = CONCEAL_TEST_SIZE;
+
       // Checks if there is more inline virtual text chunks that need to be drawn.
       wlv->more_virt_inline_chunks = has_more_inline_virt(wlv, v)
                                      || wlv->virt_inline_i < kv_size(wlv->virt_inline);
@@ -1188,6 +1192,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
   wlv.fromcol = -10;
   wlv.tocol = MAXCOL;
   wlv.vcol_sbr = -1;
+  wlv.conceal_size = 0;
 
   buf_T *buf = wp->w_buffer;
   const bool end_fill = (lnum == buf->b_ml.ml_line_count + 1);
@@ -2008,7 +2013,8 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
           if (wlv.extra_for_extmark) {
             // wlv.extra_attr should be used at this position but not
             // any further.
-            ptr += CONCEAL_TEST_SIZE;
+            ptr += wlv.conceal_size;
+            wlv.conceal_size = 0;
             wlv.reset_extra_attr = true;
           }
         }
