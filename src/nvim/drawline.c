@@ -915,7 +915,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
             || item->decor.virt_text_width == 0) {
           continue;
         }
-        if (item->draw_col >= -1 && item->start_col == v) {
+        if (item->draw_col >= -1 && (item->start_col == v || (item->start_col < wlv->conceal_end))) {
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
           wlv->conceal_end = item->end_col;
