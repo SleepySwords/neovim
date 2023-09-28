@@ -137,9 +137,11 @@ typedef struct {
                              ///< or w_skipcol or concealing
   int skipped_cells;         ///< nr of skipped cells for virtual text
                              ///< to be added to wlv.vcol later
+  int yes;
   bool more_virt_inline_chunks;  ///< indicates if there is more inline virtual text
                                  ///< after n_extra
-  int conceal_size;         ///< nr of cells to skip ptr
+  int conceal_end;         ///< nr of cells to skip ptr
+  bool virt_text_same_col;         ///< nr of cells to skip ptr
 } winlinevars_T;
 
 /// for line_putchar. Contains the state that needs to be remembered from
@@ -874,6 +876,7 @@ static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
 /// and sets has_more_virt_inline_chunks to reflect that.
 static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
 {
+  wlv->virt_text_same_col = false;
   DecorState *state = &decor_state;
   for (size_t i = 0; i < kv_size(state->active); i++) {
     DecorRange *item = &kv_A(state->active, i);
@@ -884,6 +887,12 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
       continue;
     }
     if (item->draw_col >= -1 && item->start_col >= v) {
+      if (item->start_col < wlv->conceal_end && item->end_col > wlv->conceal_end) {
+        wlv->conceal_end = item->end_col;
+      }
+      if (item->start_col < wlv->conceal_end) {
+        wlv->virt_text_same_col = true;
+      }
       return true;
     }
   }
@@ -909,6 +918,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
         if (item->draw_col >= -1 && item->start_col == v) {
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
+          wlv->conceal_end = item->end_col;
           item->draw_col = INT_MIN;
           break;
         }
@@ -931,8 +941,6 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       wlv->c_final = NUL;
       wlv->extra_attr = vtc.hl_id ? syn_id2attr(vtc.hl_id) : 0;
       wlv->n_attr = mb_charlen(vtc.text);
-
-      wlv->conceal_size = CONCEAL_TEST_SIZE;
 
       // Checks if there is more inline virtual text chunks that need to be drawn.
       wlv->more_virt_inline_chunks = has_more_inline_virt(wlv, v)
@@ -1192,7 +1200,8 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
   wlv.fromcol = -10;
   wlv.tocol = MAXCOL;
   wlv.vcol_sbr = -1;
-  wlv.conceal_size = 0;
+  wlv.conceal_end = 0;
+  wlv.yes = 0;
 
   buf_T *buf = wp->w_buffer;
   const bool end_fill = (lnum == buf->b_ml.ml_line_count + 1);
@@ -2013,8 +2022,8 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
           if (wlv.extra_for_extmark) {
             // wlv.extra_attr should be used at this position but not
             // any further.
-            ptr += wlv.conceal_size;
-            wlv.conceal_size = 0;
+            /* wlv.skip_cells += wlv.conceal_size; */
+            /* is_concealing = true; */
             wlv.reset_extra_attr = true;
           }
         }
@@ -3063,6 +3072,16 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
     if (wlv.draw_state > WL_STC && wlv.skipped_cells > 0) {
       wlv.vcol += wlv.skipped_cells;
       wlv.skipped_cells = 0;
+    }
+
+    if (wlv.n_extra == 0) {
+      // Don't start skipping until all virtual text is drawn.
+      if (wlv.conceal_end > v && !wlv.virt_text_same_col) {
+        wlv.skip_cells += wlv.conceal_end - v;
+        is_concealing = true;
+        /* wlv.yes += wlv.conceal_size; */
+        wlv.conceal_end = 0;
+      }
     }
 
     // Only advance the "wlv.vcol" when after the 'number' or

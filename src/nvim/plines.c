@@ -17,6 +17,7 @@
 #include "nvim/indent.h"
 #include "nvim/macros.h"
 #include "nvim/mark.h"
+#include "nvim/marktree.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
 #include "nvim/move.h"
@@ -227,9 +228,11 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     int left_width = 0;
     int right_width = 0;
 
+    mtkey_t find_end = MT_INVALID_KEY;
+
     while (true) {
       mtkey_t mark = marktree_itr_current(cts->cts_iter);
-      if (mark.pos.row != cts->cts_row || mark.pos.col > col) {
+      if ((mark.pos.row != cts->cts_row || mark.pos.col > col) && (find_end.pos.row != cts->cts_row)) {
         break;
       } else if (mark.pos.col == col) {
         if (!mt_end(mark)) {
@@ -242,7 +245,11 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
             }
             // Since this includes the next char size, must set to the virt length
             if (decor.conceal) {
-              cts->cts_conceal_size += CONCEAL_TEST_SIZE;
+              if (mt_start(mark)) {
+                find_end = mark;
+              } else {
+                cts->cts_conceal_size += CONCEAL_TEST_SIZE;
+              }
               cts->cts_conceal_text_size += decor.virt_text_width;
             }
             if (*s == TAB) {
@@ -253,6 +260,15 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
             }
           }
         }
+      } else if (mark.pos.col > col && mt_start(mark)) {
+          Decoration decor = get_decor(mark);
+          if (decor.conceal) {
+            find_end = mark;
+            cts->cts_conceal_text_size += decor.virt_text_width;
+          }
+      } else if (find_end.id == mark.id && find_end.ns == mark.ns && mt_end(mark)) {
+        cts->cts_conceal_size = mark.pos.col - col; //should prob investigate.
+        find_end = MT_INVALID_KEY;
       }
       marktree_itr_next(wp->w_buffer->b_marktree, cts->cts_iter);
     }
