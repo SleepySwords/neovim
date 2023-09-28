@@ -918,7 +918,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
         if (item->draw_col >= -1 && (item->start_col == v || (item->start_col < wlv->conceal_end))) {
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
-          wlv->conceal_end = item->end_col;
+          /* wlv->conceal_end = item->end_col; */
           item->draw_col = INT_MIN;
           break;
         }
@@ -1200,7 +1200,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
   wlv.fromcol = -10;
   wlv.tocol = MAXCOL;
   wlv.vcol_sbr = -1;
-  wlv.conceal_end = 0;
+  wlv.conceal_end = -1;
   wlv.yes = 0;
 
   buf_T *buf = wp->w_buffer;

@@ -239,32 +239,24 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
           Decoration decor = get_decor(mark);
           if (decor.virt_text_pos == kVTInline) {
             if (mt_right(mark)) {
-              left_width += decor.virt_text_width;
-            } else {
               right_width += decor.virt_text_width;
+            } else {
+              left_width += decor.virt_text_width;
             }
             // Since this includes the next char size, must set to the virt length
             if (decor.conceal) {
               if (mt_start(mark)) {
                 find_end = mark;
-              } else {
-                cts->cts_conceal_size += CONCEAL_TEST_SIZE;
               }
               cts->cts_conceal_text_size += decor.virt_text_width;
-            }
-            if (*s == TAB) {
-              // tab size changes because of the inserted text
-              size -= tab_size;
-              tab_size = win_chartabsize(wp, s, vcol + size);
-              size += tab_size;
             }
           }
         }
       } else if (mark.pos.col > col && mt_start(mark)) {
           Decoration decor = get_decor(mark);
           if (decor.conceal) {
-            find_end = mark;
             cts->cts_conceal_text_size += decor.virt_text_width;
+            find_end = mark;
           }
       } else if (find_end.id == mark.id && find_end.ns == mark.ns && mt_end(mark)) {
         cts->cts_conceal_size = mark.pos.col - col; //should prob investigate.
@@ -285,6 +277,13 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
       cts->cts_cur_text_width_right = right_width;
       cts->cts_conceal_text_size = 0;
       cts->cts_conceal_size = 0;
+
+      if (*s == TAB) {
+        // tab size changes because of the inserted text
+        size -= tab_size;
+        tab_size = win_chartabsize(wp, s, vcol + size);
+        size += tab_size;
+      }
     }
   }
 
