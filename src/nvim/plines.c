@@ -228,11 +228,11 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     int left_width = 0;
     int right_width = 0;
 
-    mtkey_t find_end = MT_INVALID_KEY;
+    int end_pos = -1;
 
     while (true) {
       mtkey_t mark = marktree_itr_current(cts->cts_iter);
-      if ((mark.pos.row != cts->cts_row || mark.pos.col > col) && (find_end.pos.row != cts->cts_row)) {
+      if (mark.pos.row != cts->cts_row || (mark.pos.col > col && mark.pos.col > end_pos)) {
         break;
       } else if (mark.pos.col == col) {
         if (!mt_end(mark)) {
@@ -246,9 +246,12 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
             // Since this includes the next char size, must set to the virt length
             if (decor.conceal) {
               if (mt_start(mark)) {
-                find_end = mark;
+                mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, NULL);
+                if (end.col > col) {
+                  end_pos = end.col;
+                  cts->cts_conceal_text_size += decor.virt_text_width;
+                }
               }
-              cts->cts_conceal_text_size += decor.virt_text_width;
             }
           }
         }
@@ -256,13 +259,17 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
           Decoration decor = get_decor(mark);
           if (decor.conceal) {
             cts->cts_conceal_text_size += decor.virt_text_width;
-            find_end = mark;
+            mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, cts->cts_iter);
+            if (end_pos < end.col) {
+              end_pos = end.col;
+            }
           }
-      } else if (find_end.id == mark.id && find_end.ns == mark.ns && mt_end(mark)) {
-        cts->cts_conceal_size = mark.pos.col - col; //should prob investigate.
-        find_end = MT_INVALID_KEY;
       }
       marktree_itr_next(wp->w_buffer->b_marktree, cts->cts_iter);
+    }
+
+    if (end_pos > 0) {
+      cts->cts_conceal_size = end_pos - col;
     }
 
     if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size < cts->cts_conceal_size) {

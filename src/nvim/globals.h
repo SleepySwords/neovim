@@ -31,8 +31,6 @@
 # define _PATHSEPSTR "/"
 #endif
 
-#define CONCEAL_TEST_SIZE 7
-
 // FILETYPE_FILE        used for file type detection
 // FTPLUGIN_FILE        used for loading filetype plugin files
 // INDENT_FILE          used for loading indent files
