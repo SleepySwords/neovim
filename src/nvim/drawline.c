@@ -884,10 +884,11 @@ static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
 }
 
 /// Checks if there is more inline virtual text that need to be drawn.
-static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
+// TODO(sleepyswords): could use this to wait until the next virt text before start drawing again.
+static int next_inline_virt_text(winlinevars_T *wlv, ptrdiff_t v)
 {
   if (wlv->virt_inline_i < kv_size(wlv->virt_inline)) {
-    return true;
+    return (int)v;
   }
   wlv->virt_text_within_conceal = false;
   DecorState *state = &decor_state;
@@ -900,17 +901,10 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
       continue;
     }
     if (item->draw_col >= -1 && item->start_col >= v) {
-      // TODO(sleepyswords): rewrite this so it gets the next inline virtual text.
-      if (item->start_col < wlv->conceal_end && item->end_col > wlv->conceal_end) {
-        wlv->conceal_end = item->end_col;
-      }
-      if (item->start_col < wlv->conceal_end) {
-        wlv->virt_text_within_conceal = true;
-      }
-      return true;
+      return item->start_col;
     }
   }
-  return false;
+  return -1;
 }
 
 static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v)
@@ -929,10 +923,14 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
             || item->decor.virt_text_width == 0) {
           continue;
         }
-        if (item->draw_col >= -1 && (item->start_col == v || (item->start_col > v && item->start_col < wlv->conceal_end))) {
+        if (item->draw_col >= -1
+            && (item->start_col == v
+                || (item->start_col > v && item->start_col < wlv->conceal_end))) {
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
-          wlv->conceal_end = item->end_col;
+          if (item->end_col > wlv->conceal_end) {
+            wlv->conceal_end = item->end_col;
+          }
           item->draw_col = INT_MIN;
           break;
         }
@@ -986,6 +984,9 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       assert(wlv->n_extra > 0);
       wlv->extra_for_extmark = true;
     }
+    wlv->virt_text_within_conceal = next_inline_virt_text(wlv, v) >= v && next_inline_virt_text(wlv,
+                                                                                                v) <
+                                    wlv->conceal_end;
   }
 }
 
@@ -2965,7 +2966,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
       if (*ptr != NUL
           || lcs_eol_one > 0
           || (wlv.n_extra > 0 && (wlv.c_extra != NUL || *wlv.p_extra != NUL))
-          || has_more_inline_virt(&wlv, v)) {
+          || next_inline_virt_text(&wlv, v) != -1) {
         c = wp->w_p_lcs_chars.ext;
         wlv.char_attr = win_hl_attr(wp, HLF_AT);
         mb_c = c;
@@ -3142,19 +3143,17 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
       // Don't start skipping until all virtual text is drawn.
       if (wlv.conceal_end > v && !wlv.virt_text_within_conceal) {
         wlv.skip_cells += wlv.conceal_end - v;
-        /* wlv.skipped_cells += wlv.conceal_end; */
-        is_concealing = true;
         // FIXME: Wow this is pretty bad.
-        // Need to account for skipped cells which add to the vcol added.
-        // It's added below :(
+        // When skipping cells, we add to vcol, need to remove what was added
         // Need to find how conceal currently avoids this.
-        wlv.vcol -= wlv.skip_cells;
-        wlv.conceal_end = 0;
+        wlv.skipped_cells -= wlv.skip_cells;
+        is_concealing = true;
+        wlv.conceal_end = -1;
       }
     }
 
     // The skipped cells need to be accounted for in vcol.
-    if (wlv.draw_state > WL_STC && wlv.skipped_cells > 0) {
+    if (wlv.draw_state > WL_STC && wlv.skipped_cells != 0 && wlv.skip_cells <= 0) {
       wlv.vcol += wlv.skipped_cells;
       wlv.skipped_cells = 0;
     }
@@ -3205,7 +3204,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
             || (wp->w_p_list && wp->w_p_lcs_chars.eol != NUL
                 && wlv.p_extra != at_end_str)
             || (wlv.n_extra != 0 && (wlv.c_extra != NUL || *wlv.p_extra != NUL))
-            || has_more_inline_virt(&wlv, v))) {
+            || next_inline_virt_text(&wlv, v) != -1)) {
       bool wrap = wp->w_p_wrap       // Wrapping enabled.
                   && wlv.filler_todo <= 0          // Not drawing diff filler lines.
                   && lcs_eol_one != -1         // Haven't printed the lcs_eol character.
