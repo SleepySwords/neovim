@@ -51,7 +51,6 @@
 #include "nvim/types.h"
 #include "nvim/ui.h"
 #include "nvim/vim.h"
-#include "globals.h"
 
 #define MB_FILLER_CHAR '<'  // character used when a double-width character
                             // doesn't fit.
@@ -137,11 +136,10 @@ typedef struct {
                              ///< or w_skipcol or concealing
   int skipped_cells;         ///< nr of skipped cells for virtual text
                              ///< to be added to wlv.vcol later
-  int yes;
   bool more_virt_inline_chunks;  ///< indicates if there is more inline virtual text
                                  ///< after n_extra
-  int conceal_end;         ///< nr of cells to skip ptr
-  bool virt_text_same_col;         ///< nr of cells to skip ptr
+  int conceal_end;           ///< nr of cells to skip ptr
+  bool virt_text_within_conceal;         ///< nr of cells to skip ptr
 } winlinevars_T;
 
 /// for line_putchar. Contains the state that needs to be remembered from
@@ -876,7 +874,7 @@ static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
 /// and sets has_more_virt_inline_chunks to reflect that.
 static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
 {
-  wlv->virt_text_same_col = false;
+  wlv->virt_text_within_conceal = false;
   DecorState *state = &decor_state;
   for (size_t i = 0; i < kv_size(state->active); i++) {
     DecorRange *item = &kv_A(state->active, i);
@@ -887,12 +885,12 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
       continue;
     }
     if (item->draw_col >= -1 && item->start_col >= v) {
-      // TODO: rewrite this so it gets the next inline virtual text.
+      // TODO(sleepyswords): rewrite this so it gets the next inline virtual text.
       if (item->start_col < wlv->conceal_end && item->end_col > wlv->conceal_end) {
         wlv->conceal_end = item->end_col;
       }
       if (item->start_col < wlv->conceal_end) {
-        wlv->virt_text_same_col = true;
+        wlv->virt_text_within_conceal = true;
       }
       return true;
     }
@@ -973,9 +971,6 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
         }
       }
 
-      if (wlv->conceal_end > v) {
-        wlv->skipped_cells += wlv->n_attr;
-      }
       assert(wlv->n_extra > 0);
       wlv->extra_for_extmark = true;
     }
@@ -1206,7 +1201,6 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
   wlv.tocol = MAXCOL;
   wlv.vcol_sbr = -1;
   wlv.conceal_end = -1;
-  wlv.yes = 0;
 
   buf_T *buf = wp->w_buffer;
   const bool end_fill = (lnum == buf->b_ml.ml_line_count + 1);
@@ -3073,10 +3067,15 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
 
     if (wlv.n_extra == 0) {
       // Don't start skipping until all virtual text is drawn.
-      if (wlv.conceal_end > v && !wlv.virt_text_same_col) {
+      if (wlv.conceal_end > v && !wlv.virt_text_within_conceal) {
         wlv.skip_cells += wlv.conceal_end - v;
-        is_concealing = true;
         /* wlv.skipped_cells += wlv.conceal_end; */
+        is_concealing = true;
+        // FIXME: Wow this is pretty bad.
+        // Need to account for skipped cells which add to the vcol added.
+        // It's added below :(
+        // Need to find how conceal currently avoids this.
+        wlv.vcol -= wlv.skip_cells;
         wlv.conceal_end = 0;
       }
     }
