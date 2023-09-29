@@ -220,10 +220,10 @@ static Array extmark_to_array(const ExtmarkInfo *extmark, bool id, bool add_dict
       PUT(dict, "priority", INTEGER_OBJ(decor->priority));
     }
 
-    /* if (decor->conceal) { */
-    /*   String name = cstr_to_string((char *)&decor->conceal_char); */
-    /*   PUT(dict, "conceal", STRING_OBJ(name)); */
-    /* } */
+    if (decor->conceal) {
+      String name = cstr_to_string((char *)&decor->conceal_char);
+      PUT(dict, "conceal", STRING_OBJ(name));
+    }
 
     if (decor->spell != kNone) {
       PUT(dict, "spell", BOOLEAN_OBJ(decor->spell == kTrue));
@@ -652,11 +652,11 @@ Integer nvim_buf_set_extmark(Buffer buffer, Integer ns_id, Integer line, Integer
   }
 
   if (HAS_KEY(opts, set_extmark, conceal)) {
-    /* String c = opts->conceal; */
+    String c = opts->conceal;
     decor.conceal = true;
-    /* if (c.size) { */
-    /*   decor.conceal_char = utf_ptr2char(c.data); */
-    /* } */
+    if (c.size) {
+      decor.conceal_char = utf_ptr2char(c.data);
+    }
     has_decor = true;
   }
 

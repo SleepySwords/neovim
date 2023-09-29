@@ -887,6 +887,7 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
       continue;
     }
     if (item->draw_col >= -1 && item->start_col >= v) {
+      // TODO: rewrite this so it gets the next inline virtual text.
       if (item->start_col < wlv->conceal_end && item->end_col > wlv->conceal_end) {
         wlv->conceal_end = item->end_col;
       }
@@ -915,7 +916,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
             || item->decor.virt_text_width == 0) {
           continue;
         }
-        if (item->draw_col >= -1 && (item->start_col == v || (item->start_col < wlv->conceal_end))) {
+        if (item->draw_col >= -1 && (item->start_col == v || (item->start_col > v && item->start_col < wlv->conceal_end))) {
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
           wlv->conceal_end = item->end_col;
@@ -970,6 +971,10 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
           // go to the start so the next virtual text chunk can be selected.
           continue;
         }
+      }
+
+      if (wlv->conceal_end > v) {
+        wlv->skipped_cells += wlv->n_attr;
       }
       assert(wlv->n_extra > 0);
       wlv->extra_for_extmark = true;
@@ -2022,8 +2027,6 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
           if (wlv.extra_for_extmark) {
             // wlv.extra_attr should be used at this position but not
             // any further.
-            /* wlv.skip_cells += wlv.conceal_size; */
-            /* is_concealing = true; */
             wlv.reset_extra_attr = true;
           }
         }
@@ -3068,20 +3071,20 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
       wlv.skip_cells--;
     }
 
-    // The skipped cells need to be accounted for in vcol.
-    if (wlv.draw_state > WL_STC && wlv.skipped_cells > 0) {
-      wlv.vcol += wlv.skipped_cells;
-      wlv.skipped_cells = 0;
-    }
-
     if (wlv.n_extra == 0) {
       // Don't start skipping until all virtual text is drawn.
       if (wlv.conceal_end > v && !wlv.virt_text_same_col) {
         wlv.skip_cells += wlv.conceal_end - v;
         is_concealing = true;
-        /* wlv.yes += wlv.conceal_size; */
+        /* wlv.skipped_cells += wlv.conceal_end; */
         wlv.conceal_end = 0;
       }
+    }
+
+    // The skipped cells need to be accounted for in vcol.
+    if (wlv.draw_state > WL_STC && wlv.skipped_cells > 0) {
+      wlv.vcol += wlv.skipped_cells;
+      wlv.skipped_cells = 0;
     }
 
     // Only advance the "wlv.vcol" when after the 'number' or

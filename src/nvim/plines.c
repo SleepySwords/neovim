@@ -244,20 +244,18 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
               left_width += decor.virt_text_width;
             }
             // Since this includes the next char size, must set to the virt length
-            if (decor.conceal) {
-              if (mt_start(mark)) {
-                mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, NULL);
-                if (end.col > col) {
-                  end_pos = end.col;
-                  cts->cts_conceal_text_size += decor.virt_text_width;
-                }
+            if (mt_start(mark)) {
+              mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, NULL);
+              if (end.col > col) {
+                end_pos = end.col;
+                cts->cts_conceal_text_size += decor.virt_text_width;
               }
             }
           }
         }
       } else if (mark.pos.col > col && mt_start(mark)) {
           Decoration decor = get_decor(mark);
-          if (decor.conceal) {
+          if (decor.virt_text_pos == kVTInline) {
             cts->cts_conceal_text_size += decor.virt_text_width;
             mtpos_t end = marktree_get_altpos(wp->w_buffer->b_marktree, mark, cts->cts_iter);
             if (end_pos < end.col) {
