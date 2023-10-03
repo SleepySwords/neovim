@@ -890,7 +890,6 @@ static int next_inline_virt_text(winlinevars_T *wlv, ptrdiff_t v)
   if (wlv->virt_inline_i < kv_size(wlv->virt_inline)) {
     return (int)v;
   }
-  wlv->virt_text_within_conceal = false;
   DecorState *state = &decor_state;
   for (size_t i = 0; i < kv_size(state->active); i++) {
     DecorRange *item = &kv_A(state->active, i);
@@ -929,6 +928,7 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
           wlv->virt_inline = item->decor.virt_text;
           wlv->virt_inline_hl_mode = item->decor.hl_mode;
           if (item->end_col > wlv->conceal_end) {
+            // FIX(sleepyswords): Need to handle overwriting full width characters
             wlv->conceal_end = item->end_col;
           }
           item->draw_col = INT_MIN;
@@ -984,9 +984,8 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
       assert(wlv->n_extra > 0);
       wlv->extra_for_extmark = true;
     }
-    wlv->virt_text_within_conceal = next_inline_virt_text(wlv, v) >= v && next_inline_virt_text(wlv,
-                                                                                                v) <
-                                    wlv->conceal_end;
+    wlv->virt_text_within_conceal = next_inline_virt_text(wlv, v) >= v
+                                    && next_inline_virt_text(wlv, v) < wlv->conceal_end;
   }
 }
 
