@@ -130,7 +130,7 @@ void init_chartabsize_arg(chartabsize_T *cts, win_T *wp, linenr_T lnum, colnr_T 
   cts->cts_max_head_vcol = 0;
   cts->cts_cur_text_width_left = 0;
   cts->cts_cur_text_width_right = 0;
-  cts->cts_conceal_size = 0;
+  cts->cts_conceal_pos = 0;
   cts->cts_conceal_text_size = 0;
   cts->cts_has_virt_text = false;
   cts->cts_row = lnum - 1;
@@ -268,21 +268,19 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
     }
 
     if (end_pos > 0) {
-      cts->cts_conceal_size = end_pos - col;
+      cts->cts_conceal_pos = end_pos;
     }
 
-    if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size < cts->cts_conceal_size) {
-      cts->cts_conceal_size -= size;
+    if (cts->cts_conceal_pos > col && cts->cts_conceal_text_size + col < cts->cts_conceal_pos) {
       size = 0;
-    } else if (cts->cts_conceal_size > 0 && cts->cts_conceal_text_size >= cts->cts_conceal_size) {
+    } else if (cts->cts_conceal_pos > col && cts->cts_conceal_text_size + col >= cts->cts_conceal_pos) {
       cts->cts_conceal_text_size -= size;
-      cts->cts_conceal_size -= size;
     } else {
       size += left_width + right_width + cts->cts_conceal_text_size;
       cts->cts_cur_text_width_left = left_width + cts->cts_conceal_text_size;
       cts->cts_cur_text_width_right = right_width;
       cts->cts_conceal_text_size = 0;
-      cts->cts_conceal_size = 0;
+      cts->cts_conceal_pos = -1;
 
       if (*s == TAB) {
         // tab size changes because of the inserted text
