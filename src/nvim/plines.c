@@ -271,10 +271,12 @@ int win_lbr_chartabsize(chartabsize_T *cts, int *headp)
       cts->cts_conceal_pos = end_pos;
     }
 
-    if (cts->cts_conceal_pos > col && cts->cts_conceal_text_size + col < cts->cts_conceal_pos) {
-      size = 0;
-    } else if (cts->cts_conceal_pos > col && cts->cts_conceal_text_size + col >= cts->cts_conceal_pos) {
-      cts->cts_conceal_text_size -= size;
+    if (cts->cts_conceal_pos > col) {
+      if (cts->cts_conceal_text_size + col < cts->cts_conceal_pos) {
+        size = 0;
+      } else {
+        cts->cts_conceal_text_size -= size;
+      }
     } else {
       size += left_width + right_width + cts->cts_conceal_text_size;
       cts->cts_cur_text_width_left = left_width + cts->cts_conceal_text_size;

@@ -3141,7 +3141,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, bool number_onl
     if (wlv.n_extra == 0) {
       // Don't start skipping until all virtual text is drawn.
       if (wlv.conceal_end > v && !wlv.virt_text_within_conceal) {
-        wlv.skip_cells += wlv.conceal_end - v;
+        wlv.skip_cells += mb_string2cells_len(ptr, (size_t)(wlv.conceal_end - v));
         // FIXME: Wow this is pretty bad.
         // When skipping cells, we add to vcol, need to remove what was added
         // Need to find how conceal currently avoids this.
